@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Slideshow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        .slideshow-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 20px 0;
+        }
+
+        .slide-container {
+            background: white;
+            width: 100%;
+            height: calc(100vh - 200px); /* Reduced height to make room for controls */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin-bottom: 20px; /* Add space between slide and controls */
+        }
+
+        .slide {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .slide svg {
+            width: auto !important;
+            height: auto !important;
+            max-width: 95% !important;
+            max-height: 95% !important;
+            display: block;
+            margin: auto;
+        }
+
+        .controls {
+            position: relative; /* Changed from fixed to relative */
+            bottom: auto; /* Remove fixed bottom */
+            left: auto; /* Remove fixed left */
+            transform: none; /* Remove transform */
+            display: flex;
+            gap: 60px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px 60px;
+            border-radius: 24px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            align-items: center;
+        }
+
+        .btn {
+            padding: 30px 60px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 4px solid white;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 36px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+            min-width: 300px;
+            text-align: center;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .slide-number {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px 60px;
+            border-radius: 16px;
+            font-size: 36px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            z-index: 10;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            border: 4px solid white;
+        }
+
+        /* Fullscreen button */
+        .fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            z-index: 10;
+            font-size: 20px;
+        }
+
+        .fullscreen-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        /* Mobile styles */
+        @media (max-width: 768px) {
+            .slideshow-container {
+                padding: 10px 0;
+            }
+
+            .slide-container {
+                height: calc(100vh - 300px); /* More space for stacked controls */
+                margin-bottom: 20px;
+            }
+
+            .controls {
+                padding: 20px;
+                gap: 20px;
+                flex-direction: column;
+                width: 90%;
+                margin: 0 auto;
+            }
+
+            .btn {
+                padding: 15px 30px;
+                font-size: 24px;
+                min-width: 100%;
+                border-width: 3px;
+            }
+
+            .checkbox-container {
+                font-size: 20px;
+                margin: 0;
+                gap: 20px;
+                justify-content: center;
+                flex-wrap: wrap;
+                text-align: center;
+            }
+
+            .custom-checkbox {
+                width: 30px;
+                height: 30px;
+                border-width: 2px;
+            }
+
+            .slide-number {
+                padding: 12px 24px;
+                font-size: 20px;
+                border-width: 2px;
+                bottom: 10px;
+                right: 10px;
+            }
+
+            .fullscreen-btn {
+                top: 10px;
+                right: 10px;
+                padding: 8px;
+                font-size: 16px;
+            }
+
+            /* Improve touch targets */
+            .btn, .custom-checkbox, .fullscreen-btn {
+                touch-action: manipulation;
+            }
+
+            /* Prevent text selection on buttons */
+            .btn, .checkbox-container {
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            /* Optimize for different mobile heights */
+            @media (max-height: 600px) {
+                .slide-container {
+                    height: calc(100vh - 250px);
+                }
+
+                .controls {
+                    padding: 15px;
+                }
+
+                .btn {
+                    padding: 12px 24px;
+                    font-size: 20px;
+                }
+
+                .checkbox-container {
+                    font-size: 18px;
+                }
+            }
+
+            /* Handle very small screens */
+            @media (max-width: 360px) {
+                .btn {
+                    padding: 12px 20px;
+                    font-size: 18px;
+                }
+
+                .checkbox-container {
+                    font-size: 16px;
+                }
+
+                .slide-number {
+                    padding: 8px 16px;
+                    font-size: 16px;
+                }
+            }
+        }
+
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 40px;
+            color: white;
+            font-size: 36px;
+            margin-left: 60px;
+            white-space: nowrap;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .custom-checkbox {
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            margin: 0;
+            accent-color: white;
+            border: 4px solid white;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="slideshow-container">
+        <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶</button>
+        <div class="slide-container">
+            <div id="slide" class="slide"></div>
+        </div>
+        <div class="controls">
+            <button class="btn" onclick="prevSlide()">Previous</button>
+            <button class="btn" onclick="nextSlide()">Next</button>
+            <div class="checkbox-container">
+                <input type="checkbox" id="showGlossary" class="custom-checkbox">
+                <label for="showGlossary">Additional Glossary Visuals</label>
+            </div>
+        </div>
+        <div class="slide-number" id="slideNumber"></div>
+    </div>
+
+    <script>
+        // List of all slide numbers
+        const totalSlides = 34;
+        let currentSlide = 1;
+        const glossaryStart = 25;
+        const glossaryEnd = 33;
+
+        // Function to check if slide is accessible
+        function isSlideAccessible(slideNumber) {
+            const showGlossary = document.getElementById('showGlossary').checked;
+            if (slideNumber >= glossaryStart && slideNumber <= glossaryEnd) {
+                return showGlossary;
+            }
+            return true;
+        }
+
+        // Function to find next accessible slide
+        function findNextAccessibleSlide(current, direction) {
+            let nextSlide = current + direction;
+            while (nextSlide > 0 && nextSlide <= totalSlides) {
+                if (isSlideAccessible(nextSlide)) {
+                    return nextSlide;
+                }
+                nextSlide += direction;
+            }
+            return current;
+        }
+
+        // Function to load and display a slide
+        async function updateSlide() {
+            try {
+                // If current slide is not accessible, move to nearest accessible slide
+                if (!isSlideAccessible(currentSlide)) {
+                    currentSlide = findNextAccessibleSlide(currentSlide, -1);
+                }
+
+                const response = await fetch(`output/${currentSlide}.html`);
+                const html = await response.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const svgContent = doc.querySelector('svg');
+                
+                const slideElement = document.getElementById('slide');
+                slideElement.innerHTML = '';
+                if (svgContent) {
+                    // Remove any fixed dimensions from the SVG
+                    svgContent.removeAttribute('width');
+                    svgContent.removeAttribute('height');
+                    svgContent.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+                    svgContent.style.width = 'auto';
+                    svgContent.style.height = 'auto';
+                    svgContent.style.maxWidth = '95%';
+                    svgContent.style.maxHeight = '95%';
+                    slideElement.appendChild(svgContent);
+                }
+                
+                document.getElementById('slideNumber').textContent = `Slide ${currentSlide} of ${totalSlides}`;
+            } catch (error) {
+                console.error('Error loading slide:', error);
+            }
+        }
+
+        // Navigation functions
+        function nextSlide() {
+            const nextAccessible = findNextAccessibleSlide(currentSlide, 1);
+            if (nextAccessible !== currentSlide) {
+                currentSlide = nextAccessible;
+                updateSlide();
+            }
+        }
+
+        function prevSlide() {
+            const prevAccessible = findNextAccessibleSlide(currentSlide, -1);
+            if (prevAccessible !== currentSlide) {
+                currentSlide = prevAccessible;
+                updateSlide();
+            }
+        }
+
+        // Add checkbox event listener
+        document.getElementById('showGlossary').addEventListener('change', updateSlide);
+
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+            if (e.key === 'f') toggleFullscreen();
+        });
+
+        // Fullscreen functionality
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Load first slide
+        updateSlide();
+    </script>
+</body>
+</html> 
