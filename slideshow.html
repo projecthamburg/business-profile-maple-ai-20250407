@@ -64,6 +64,10 @@
             display: block;
             transform-origin: center;
             will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            transform-style: preserve-3d;
+            touch-action: none;
         }
 
         /* Normal view */
@@ -436,24 +440,44 @@
                 // Start fade out
                 slideElement.classList.add('fade-out');
                 
+                // Cleanup old image
+                const cleanupOldImage = () => {
+                    const oldImg = slideElement.querySelector('img');
+                    if (oldImg) {
+                        oldImg.onload = null;
+                        oldImg.onerror = null;
+                        oldImg.remove();
+                    }
+                };
+                
                 // Create new image element
                 const img = document.createElement('img');
                 img.src = `images/${currentSlide}.png`;
                 img.alt = `Slide ${currentSlide}`;
                 img.style.opacity = '0';
                 
-                // Wait for image to load
-                await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = () => {
-                        console.error('Failed to load image:', currentSlide);
-                        reject();
-                    };
-                }).catch(() => {});
+                // Wait for image to load with timeout
+                try {
+                    await Promise.race([
+                        new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = () => reject('Failed to load image');
+                        }),
+                        new Promise((_, reject) => 
+                            setTimeout(() => reject('Image load timeout'), 5000)
+                        )
+                    ]);
+                } catch (loadError) {
+                    console.warn('Image load issue:', loadError);
+                    // Could add fallback image here if needed
+                }
                 
                 // Clear current slide and add new image
-                slideElement.innerHTML = '';
+                cleanupOldImage();
                 slideElement.appendChild(img);
+                
+                // Reset zoom state
+                SlideState.reset();
                 
                 // Trigger reflow
                 void slideElement.offsetHeight;
@@ -466,7 +490,8 @@
                 // Update slide number
                 document.getElementById('slideNumber').textContent = `Slide ${currentSlide} of ${totalSlides}`;
             } catch (error) {
-                console.error('Error loading slide:', error);
+                console.error('Error updating slide:', error);
+                // Add recovery logic - maybe show error state or retry
             }
         }
 
@@ -508,19 +533,42 @@
             }
         }
 
-        // Touch and zoom support variables
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchEndX = 0;
-        let touchEndY = 0;
-        let startDistance = 0;
-        let isZooming = false;
-        let currentScale = 1;
-        let initialScale = 1;
-        let translateX = 0;
-        let translateY = 0;
-        let startCenterX = 0;
-        let startCenterY = 0;
+        // State management
+        const SlideState = {
+            touchStartX: 0,
+            touchStartY: 0,
+            touchEndX: 0,
+            touchEndY: 0,
+            startDistance: 0,
+            isZooming: false,
+            scale: 1,
+            initialScale: 1,
+            translateX: 0,
+            translateY: 0,
+            startCenterX: 0,
+            startCenterY: 0,
+
+            reset() {
+                this.scale = 1;
+                this.translateX = 0;
+                this.translateY = 0;
+                this.isZooming = false;
+            },
+
+            updateTransform(img) {
+                if (!img) return;
+                img.style.transform = `scale(${this.scale}) 
+                    translate(${this.translateX / this.scale}px, 
+                             ${this.translateY / this.scale}px)`;
+            }
+        };
+        
+        // Device capability detection
+        const isTouchDevice = () => {
+            return ('ontouchstart' in window) ||
+                   (navigator.maxTouchPoints > 0) ||
+                   (navigator.msMaxTouchPoints > 0);
+        };
         
         // Constants
         const MIN_ZOOM = 1;
@@ -540,31 +588,31 @@
         function handleZoomStart(e) {
             if (e.touches.length !== 2) return;
             
-            isZooming = true;
             const img = slideElement.querySelector('img');
             if (!img) return;
 
             const touch1 = e.touches[0];
             const touch2 = e.touches[1];
             
-            // Calculate initial distance and center point
-            startDistance = Math.hypot(
+            // Update state
+            SlideState.isZooming = true;
+            SlideState.startDistance = Math.hypot(
                 touch2.clientX - touch1.clientX,
                 touch2.clientY - touch1.clientY
             );
             
-            startCenterX = (touch1.clientX + touch2.clientX) / 2;
-            startCenterY = (touch1.clientY + touch2.clientY) / 2;
+            SlideState.startCenterX = (touch1.clientX + touch2.clientX) / 2;
+            SlideState.startCenterY = (touch1.clientY + touch2.clientY) / 2;
             
-            initialScale = currentScale;
-            translateX = 0;
-            translateY = 0;
+            SlideState.initialScale = SlideState.scale;
+            SlideState.translateX = 0;
+            SlideState.translateY = 0;
             
             e.preventDefault();
         }
 
         function handleZoomMove(e) {
-            if (!isZooming || e.touches.length !== 2) return;
+            if (!SlideState.isZooming || e.touches.length !== 2) return;
             
             const img = slideElement.querySelector('img');
             if (!img) return;
@@ -577,23 +625,22 @@
                 touch2.clientX - touch1.clientX,
                 touch2.clientY - touch1.clientY
             );
-            const newScale = initialScale * (currentDistance / startDistance);
-            currentScale = Math.min(Math.max(MIN_ZOOM, newScale), MAX_ZOOM);
+            const newScale = SlideState.initialScale * (currentDistance / SlideState.startDistance);
+            SlideState.scale = Math.min(Math.max(MIN_ZOOM, newScale), MAX_ZOOM);
             
             // Calculate center point for panning
             const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
             const currentCenterY = (touch1.clientY + touch2.clientY) / 2;
             
-            // Update translation based on center point movement
-            translateX = currentCenterX - startCenterX;
-            translateY = currentCenterY - startCenterY;
+            // Update translation
+            SlideState.translateX = currentCenterX - SlideState.startCenterX;
+            SlideState.translateY = currentCenterY - SlideState.startCenterY;
             
             // Apply transform
-            const transform = `scale(${currentScale}) translate(${translateX / currentScale}px, ${translateY / currentScale}px)`;
-            img.style.transform = transform;
+            SlideState.updateTransform(img);
             
             // Update classes
-            if (currentScale > 1) {
+            if (SlideState.scale > 1) {
                 slideElement.classList.add('zoomed');
             } else {
                 slideElement.classList.remove('zoomed');
@@ -603,8 +650,7 @@
         }
 
         function handleZoomEnd(e) {
-            if (!isZooming) return;
-            isZooming = false;
+            if (!SlideState.isZooming) return;
             
             const img = slideElement.querySelector('img');
             if (!img) return;
@@ -612,9 +658,7 @@
             if (isFullscreen()) {
                 // In fullscreen, snap back to original position
                 slideElement.classList.add('snap-back');
-                currentScale = 1;
-                translateX = 0;
-                translateY = 0;
+                SlideState.reset();
                 img.style.transform = 'scale(1) translate(0, 0)';
                 
                 setTimeout(() => {
@@ -622,35 +666,35 @@
                 }, SNAP_BACK_DURATION);
             } else {
                 // In normal view, maintain zoom level
-                if (currentScale <= 1) {
-                    currentScale = 1;
-                    translateX = 0;
-                    translateY = 0;
+                if (SlideState.scale <= 1) {
+                    SlideState.reset();
                     slideElement.classList.remove('zoomed');
                     img.style.transform = 'scale(1) translate(0, 0)';
                 }
             }
+            
+            SlideState.isZooming = false;
         }
 
         // Handle swipe gestures
         function handleSwipeStart(e) {
-            if (e.touches.length !== 1 || currentScale > 1) return;
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
+            if (e.touches.length !== 1 || SlideState.scale > 1) return;
+            SlideState.touchStartX = e.touches[0].clientX;
+            SlideState.touchStartY = e.touches[0].clientY;
         }
 
         function handleSwipeMove(e) {
-            if (e.touches.length !== 1 || currentScale > 1) return;
+            if (e.touches.length !== 1 || SlideState.scale > 1) return;
             const touch = e.touches[0];
-            const deltaX = touch.clientX - touchStartX;
+            const deltaX = touch.clientX - SlideState.touchStartX;
             updateSwipeOverlay(deltaX);
         }
 
         function handleSwipeEnd(e) {
-            if (currentScale > 1) return;
+            if (SlideState.scale > 1) return;
             const touch = e.changedTouches[0];
-            const deltaX = touch.clientX - touchStartX;
-            const deltaY = Math.abs(touch.clientY - touchStartY);
+            const deltaX = touch.clientX - SlideState.touchStartX;
+            const deltaY = Math.abs(touch.clientY - SlideState.touchStartY);
             
             if (Math.abs(deltaX) > 50 && deltaY < 50) {
                 handleSwipe(deltaX);
@@ -660,46 +704,52 @@
             rightOverlay.style.opacity = '0';
         }
 
-        // Add touch event listeners
-        document.addEventListener('touchstart', e => {
-            if (e.touches.length === 2) {
-                handleZoomStart(e);
-            } else {
-                handleSwipeStart(e);
-            }
-        });
+        // Initialize event listeners
+        function initializeEventListeners() {
+            // Only add touch events - we'll add mouse support later
+            document.addEventListener('touchstart', e => {
+                if (e.touches.length === 2) {
+                    handleZoomStart(e);
+                } else {
+                    handleSwipeStart(e);
+                }
+            }, { passive: true });
 
-        document.addEventListener('touchmove', e => {
-            if (isZooming) {
-                handleZoomMove(e);
-            } else {
-                handleSwipeMove(e);
-            }
-        });
+            document.addEventListener('touchmove', e => {
+                if (SlideState.isZooming) {
+                    handleZoomMove(e);
+                } else {
+                    handleSwipeMove(e);
+                }
+            }, { passive: false });
 
-        document.addEventListener('touchend', e => {
-            if (isZooming) {
-                handleZoomEnd(e);
-            } else {
-                handleSwipeEnd(e);
-            }
-        });
+            document.addEventListener('touchend', e => {
+                if (SlideState.isZooming) {
+                    handleZoomEnd(e);
+                } else {
+                    handleSwipeEnd(e);
+                }
+            });
+        }
+
+        // Initialize events
+        initializeEventListeners();
 
         function handleDoubleTap(e) {
-            if (currentScale > 1) {
+            if (SlideState.scale > 1) {
                 // Reset zoom
-                currentScale = 1;
+                SlideState.reset();
                 const img = slideElement.querySelector('img');
                 if (img) {
-                    img.style.transform = 'scale(1)';
+                    SlideState.updateTransform(img);
                 }
                 slideElement.classList.remove('zoomed');
             } else {
                 // Zoom to 2x at tap point
-                currentScale = 2;
+                SlideState.scale = 2;
                 const img = slideElement.querySelector('img');
                 if (img) {
-                    img.style.transform = 'scale(2)';
+                    SlideState.updateTransform(img);
                 }
                 slideElement.classList.add('zoomed');
             }
@@ -730,10 +780,8 @@
             }
         }
 
-        // Add touch event listeners
-        document.addEventListener('touchstart', handleZoomStart, false);
-        document.addEventListener('touchmove', handleZoomMove, { passive: false });
-        document.addEventListener('touchend', handleZoomEnd, false);
+        // Initialize all event listeners
+        initializeEventListeners();
         
         // Add double-tap listener for quick zoom
         let lastTap = 0;
