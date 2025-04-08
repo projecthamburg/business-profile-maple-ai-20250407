@@ -62,6 +62,18 @@
             height: auto;
             object-fit: contain;
             display: block;
+            transform-origin: center;
+            transition: transform 0.2s ease-out;
+            touch-action: pinch-zoom;
+        }
+
+        .slide.zoomed {
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .slide.zoomed img {
+            cursor: zoom-out;
         }
 
         @media (max-width: 768px) {
@@ -484,41 +496,120 @@
             }
         }
 
-        // Touch support variables
+        // Touch and zoom support variables
         let touchStartX = 0;
+        let touchStartY = 0;
         let touchEndX = 0;
-        let currentTouchX = 0;
+        let touchEndY = 0;
+        let startDistance = 0;
+        let isZooming = false;
+        let currentScale = 1;
+        let initialScale = 1;
         
         // Get overlay elements
         const leftOverlay = document.getElementById('swipeLeft');
         const rightOverlay = document.getElementById('swipeRight');
+        const slideElement = document.getElementById('slide');
         
-        // Add touch event listeners
-        document.addEventListener('touchstart', e => {
-            touchStartX = e.changedTouches[0].screenX;
-            currentTouchX = touchStartX;
-        }, false);
+        // Handle zoom gestures
+        function handleZoomStart(e) {
+            if (e.touches.length === 2) {
+                isZooming = true;
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                startDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                initialScale = currentScale;
+            } else {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }
 
-        document.addEventListener('touchmove', e => {
-            currentTouchX = e.changedTouches[0].screenX;
-            updateSwipeOverlay();
-        }, false);
-        
-        document.addEventListener('touchend', e => {
-            touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
+        function handleZoomMove(e) {
+            if (isZooming && e.touches.length === 2) {
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                currentScale = initialScale * (currentDistance / startDistance);
+                currentScale = Math.min(Math.max(1, currentScale), 4); // Limit zoom between 1x and 4x
+                
+                const img = slideElement.querySelector('img');
+                if (img) {
+                    img.style.transform = `scale(${currentScale})`;
+                }
+                
+                if (currentScale > 1) {
+                    slideElement.classList.add('zoomed');
+                } else {
+                    slideElement.classList.remove('zoomed');
+                }
+                
+                e.preventDefault(); // Prevent default zoom
+            } else if (!isZooming && e.touches.length === 1) {
+                // Only handle swipe if not zoomed
+                if (currentScale === 1) {
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    updateSwipeOverlay(deltaX);
+                }
+            }
+        }
+
+        function handleZoomEnd(e) {
+            if (isZooming) {
+                isZooming = false;
+            } else if (currentScale === 1) {
+                // Only handle swipe if not zoomed
+                touchEndX = e.changedTouches[0].clientX;
+                touchEndY = e.changedTouches[0].clientY;
+                
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = Math.abs(touchEndY - touchStartY);
+                
+                // Only trigger swipe if horizontal movement is greater and vertical movement is small
+                if (Math.abs(deltaX) > 50 && deltaY < 50) {
+                    handleSwipe(deltaX);
+                }
+            }
+            
             // Reset overlays
             leftOverlay.style.opacity = '0';
             rightOverlay.style.opacity = '0';
-        }, false);
+        }
+
+        function handleDoubleTap(e) {
+            if (currentScale > 1) {
+                // Reset zoom
+                currentScale = 1;
+                const img = slideElement.querySelector('img');
+                if (img) {
+                    img.style.transform = 'scale(1)';
+                }
+                slideElement.classList.remove('zoomed');
+            } else {
+                // Zoom to 2x at tap point
+                currentScale = 2;
+                const img = slideElement.querySelector('img');
+                if (img) {
+                    img.style.transform = 'scale(2)';
+                }
+                slideElement.classList.add('zoomed');
+            }
+        }
         
         // Update swipe overlay feedback
-        function updateSwipeOverlay() {
-            const swipeDistance = currentTouchX - touchStartX;
+        function updateSwipeOverlay(deltaX) {
             const maxOpacity = 0.3;
-            const opacity = Math.min(Math.abs(swipeDistance) / 100, maxOpacity);
+            const opacity = Math.min(Math.abs(deltaX) / 100, maxOpacity);
             
-            if (swipeDistance > 0) {
+            if (deltaX > 0) {
                 rightOverlay.style.opacity = opacity;
                 leftOverlay.style.opacity = '0';
             } else {
@@ -528,20 +619,32 @@
         }
         
         // Handle swipe gesture
-        function handleSwipe() {
-            const swipeThreshold = 50; // minimum distance for swipe
-            const swipeDistance = touchEndX - touchStartX;
-            
-            if (Math.abs(swipeDistance) > swipeThreshold) {
-                if (swipeDistance > 0) {
-                    // Swipe right - go to previous slide
-                    prevSlide();
-                } else {
-                    // Swipe left - go to next slide
-                    nextSlide();
-                }
+        function handleSwipe(deltaX) {
+            if (deltaX > 0) {
+                // Swipe right - go to previous slide
+                prevSlide();
+            } else {
+                // Swipe left - go to next slide
+                nextSlide();
             }
         }
+
+        // Add touch event listeners
+        document.addEventListener('touchstart', handleZoomStart, false);
+        document.addEventListener('touchmove', handleZoomMove, { passive: false });
+        document.addEventListener('touchend', handleZoomEnd, false);
+        
+        // Add double-tap listener for quick zoom
+        let lastTap = 0;
+        document.addEventListener('touchend', function(e) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTap;
+            if (tapLength < 300 && tapLength > 0) {
+                handleDoubleTap(e);
+                e.preventDefault();
+            }
+            lastTap = currentTime;
+        });
 
         // Control visibility
         let controlsTimeout;
