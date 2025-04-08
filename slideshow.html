@@ -49,7 +49,7 @@
             justify-content: center;
             position: relative;
             margin-bottom: var(--padding);
-            overflow: hidden; /* Prevent image overflow */
+            overflow: hidden;
         }
 
         .slide {
@@ -58,17 +58,34 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: var(--padding);
+            padding: 0;
         }
 
         /* Image sizing rules */
         .slide img {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
+            width: 100%;
+            height: 100%;
             object-fit: contain;
             display: block;
+            margin: 0;
+            padding: 0;
+        }
+
+        @media (max-width: 768px) {
+            .slide-container {
+                background: black;
+                margin-bottom: 0;
+            }
+            
+            .slide {
+                padding: 0;
+            }
+            
+            .slide img {
+                object-fit: contain;
+                width: 100%;
+                height: 100%;
+            }
         }
 
         .controls {
@@ -199,24 +216,51 @@
         /* Portrait mode adjustments */
         @media (max-width: 768px) and (orientation: portrait) {
             :root {
-                --control-height: 140px;
+                --control-height: 100px;
+                --padding: 8px;
+            }
+
+            .slideshow-container {
+                padding: 0;
             }
 
             .slide-container {
-                height: calc(100vh - var(--control-height) - var(--padding) * 2);
+                height: calc(100vh - var(--control-height));
+            }
+
+            .controls {
+                padding: var(--padding);
+                background: rgba(0, 0, 0, 0.8);
+            }
+
+            .btn {
+                padding: 8px 16px;
+                min-width: 100px;
+                font-size: 0.9rem;
+            }
+
+            .slide-number {
+                font-size: 0.9rem;
+                padding: 8px 16px;
             }
         }
 
         /* Landscape mode adjustments */
         @media (max-width: 768px) and (orientation: landscape) {
             :root {
-                --control-height: 100px;
-                --padding: 10px;
+                --control-height: 80px;
+                --padding: 8px;
+            }
+
+            .slideshow-container {
+                padding: 0;
             }
 
             .controls {
                 flex-direction: row;
                 justify-content: space-between;
+                padding: var(--padding);
+                background: rgba(0, 0, 0, 0.8);
             }
 
             .controls-left {
@@ -229,8 +273,14 @@
             }
 
             .btn {
-                padding: 8px 16px;
-                min-width: 100px;
+                padding: 6px 12px;
+                min-width: 90px;
+                font-size: 0.85rem;
+            }
+
+            .slide-number {
+                font-size: 0.85rem;
+                padding: 6px 12px;
             }
         }
 
