@@ -310,23 +310,14 @@
             border-radius: 3px;
         }
 
-        .loader {
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #3498db;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            display: none;
+        .slide.fade-out {
+            opacity: 0;
+            transition: opacity 0.2s ease-out;
         }
 
-        @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        .slide.fade-in {
+            opacity: 1;
+            transition: opacity 0.2s ease-in;
         }
 
         /* Touch feedback indicators */
@@ -364,7 +355,6 @@
         <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶</button>
         <div class="slide-container">
             <div id="slide" class="slide"></div>
-            <div id="loader" class="loader"></div>
         </div>
         <div class="controls">
             <div class="controls-left">
@@ -418,45 +408,38 @@
                 }
 
                 const slideElement = document.getElementById('slide');
-                const loader = document.getElementById('loader');
-                let loaderTimeout;
                 
-                slideElement.innerHTML = '';
+                // Start fade out
+                slideElement.classList.add('fade-out');
                 
-                // Create and configure the image element
+                // Create new image element
                 const img = document.createElement('img');
                 img.src = `images/${currentSlide}.png`;
                 img.alt = `Slide ${currentSlide}`;
-                img.style.maxWidth = '95%';
-                img.style.maxHeight = '95%';
-                img.style.objectFit = 'contain';
-                img.style.display = 'block';
                 img.style.opacity = '0';
-                img.style.margin = '0 auto';
                 
-                // Only show loader if image takes more than 100ms to load
-                loaderTimeout = setTimeout(() => {
-                    loader.style.display = 'block';
-                }, 100);
+                // Wait for image to load
+                await new Promise((resolve, reject) => {
+                    img.onload = resolve;
+                    img.onerror = () => {
+                        console.error('Failed to load image:', currentSlide);
+                        reject();
+                    };
+                }).catch(() => {});
                 
-                // Handle image load
-                img.onload = () => {
-                    clearTimeout(loaderTimeout);
-                    loader.style.display = 'none';
-                    requestAnimationFrame(() => {
-                        img.style.transition = 'opacity 0.3s ease-in-out';
-                        img.style.opacity = '1';
-                    });
-                };
-
-                // Handle image error
-                img.onerror = () => {
-                    clearTimeout(loaderTimeout);
-                    loader.style.display = 'none';
-                    console.error('Failed to load image:', currentSlide);
-                };
-                
+                // Clear current slide and add new image
+                slideElement.innerHTML = '';
                 slideElement.appendChild(img);
+                
+                // Trigger reflow
+                void slideElement.offsetHeight;
+                
+                // Start fade in
+                slideElement.classList.remove('fade-out');
+                slideElement.classList.add('fade-in');
+                img.style.opacity = '1';
+                
+                // Update slide number
                 document.getElementById('slideNumber').textContent = `Slide ${currentSlide} of ${totalSlides}`;
             } catch (error) {
                 console.error('Error loading slide:', error);
