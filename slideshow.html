@@ -63,25 +63,29 @@
             object-fit: contain;
             display: block;
             transform-origin: center;
-            transition: transform 0.2s ease-out;
-            touch-action: none;
+            will-change: transform;
         }
 
-        .slide.zoomed {
-            overflow: auto;
-            -webkit-overflow-scrolling: touch;
+        /* Normal view */
+        .slide:not(.fullscreen) img {
+            transition: none;
         }
 
-        .slide.zoomed img {
+        .slide:not(.fullscreen).zoomed img {
             cursor: move;
         }
 
+        /* Fullscreen view */
         .slide.fullscreen img {
             transition: transform 0.3s ease-out;
         }
 
-        .slide.fullscreen.reset-zoom img {
-            transform: scale(1) translate(0, 0) !important;
+        .slide.fullscreen.zoomed img {
+            transition: none;
+        }
+
+        .slide.fullscreen.snap-back img {
+            transition: transform 0.3s ease-out;
         }
 
         @media (max-width: 768px) {
@@ -511,13 +515,17 @@
         let touchEndY = 0;
         let startDistance = 0;
         let isZooming = false;
-        let isPanning = false;
         let currentScale = 1;
         let initialScale = 1;
         let translateX = 0;
         let translateY = 0;
-        let lastTranslateX = 0;
-        let lastTranslateY = 0;
+        let startCenterX = 0;
+        let startCenterY = 0;
+        
+        // Constants
+        const MIN_ZOOM = 1;
+        const MAX_ZOOM = 3;
+        const SNAP_BACK_DURATION = 300;
         
         // Get overlay elements
         const leftOverlay = document.getElementById('swipeLeft');
@@ -530,108 +538,152 @@
         
         // Handle zoom gestures
         function handleZoomStart(e) {
+            if (e.touches.length !== 2) return;
+            
+            isZooming = true;
             const img = slideElement.querySelector('img');
             if (!img) return;
 
-            if (e.touches.length === 2) {
-                isZooming = true;
-                isPanning = false;
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                startDistance = Math.hypot(
-                    touch2.clientX - touch1.clientX,
-                    touch2.clientY - touch1.clientY
-                );
-                initialScale = currentScale;
-            } else if (e.touches.length === 1) {
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-                if (currentScale > 1) {
-                    isPanning = true;
-                    isZooming = false;
-                    lastTranslateX = translateX || 0;
-                    lastTranslateY = translateY || 0;
-                }
-            }
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            
+            // Calculate initial distance and center point
+            startDistance = Math.hypot(
+                touch2.clientX - touch1.clientX,
+                touch2.clientY - touch1.clientY
+            );
+            
+            startCenterX = (touch1.clientX + touch2.clientX) / 2;
+            startCenterY = (touch1.clientY + touch2.clientY) / 2;
+            
+            initialScale = currentScale;
+            translateX = 0;
+            translateY = 0;
+            
+            e.preventDefault();
         }
 
         function handleZoomMove(e) {
+            if (!isZooming || e.touches.length !== 2) return;
+            
             const img = slideElement.querySelector('img');
             if (!img) return;
 
-            if (isZooming && e.touches.length === 2) {
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                const currentDistance = Math.hypot(
-                    touch2.clientX - touch1.clientX,
-                    touch2.clientY - touch1.clientY
-                );
-                
-                currentScale = initialScale * (currentDistance / startDistance);
-                currentScale = Math.min(Math.max(1, currentScale), 4);
-                
-                updateImageTransform(img);
-                e.preventDefault();
-            } else if (isPanning && e.touches.length === 1) {
-                const touch = e.touches[0];
-                const deltaX = touch.clientX - touchStartX;
-                const deltaY = touch.clientY - touchStartY;
-                
-                translateX = lastTranslateX + deltaX;
-                translateY = lastTranslateY + deltaY;
-                
-                updateImageTransform(img);
-                e.preventDefault();
-            } else if (!isZooming && !isPanning && e.touches.length === 1) {
-                if (currentScale === 1) {
-                    const touch = e.touches[0];
-                    const deltaX = touch.clientX - touchStartX;
-                    updateSwipeOverlay(deltaX);
-                }
+            const touch1 = e.touches[0];
+            const touch2 = e.touches[1];
+            
+            // Calculate new scale
+            const currentDistance = Math.hypot(
+                touch2.clientX - touch1.clientX,
+                touch2.clientY - touch1.clientY
+            );
+            const newScale = initialScale * (currentDistance / startDistance);
+            currentScale = Math.min(Math.max(MIN_ZOOM, newScale), MAX_ZOOM);
+            
+            // Calculate center point for panning
+            const currentCenterX = (touch1.clientX + touch2.clientX) / 2;
+            const currentCenterY = (touch1.clientY + touch2.clientY) / 2;
+            
+            // Update translation based on center point movement
+            translateX = currentCenterX - startCenterX;
+            translateY = currentCenterY - startCenterY;
+            
+            // Apply transform
+            const transform = `scale(${currentScale}) translate(${translateX / currentScale}px, ${translateY / currentScale}px)`;
+            img.style.transform = transform;
+            
+            // Update classes
+            if (currentScale > 1) {
+                slideElement.classList.add('zoomed');
+            } else {
+                slideElement.classList.remove('zoomed');
             }
+            
+            e.preventDefault();
         }
 
         function handleZoomEnd(e) {
-            if (isZooming || isPanning) {
-                isZooming = false;
-                isPanning = false;
+            if (!isZooming) return;
+            isZooming = false;
+            
+            const img = slideElement.querySelector('img');
+            if (!img) return;
+            
+            if (isFullscreen()) {
+                // In fullscreen, snap back to original position
+                slideElement.classList.add('snap-back');
+                currentScale = 1;
+                translateX = 0;
+                translateY = 0;
+                img.style.transform = 'scale(1) translate(0, 0)';
                 
+                setTimeout(() => {
+                    slideElement.classList.remove('snap-back', 'zoomed');
+                }, SNAP_BACK_DURATION);
+            } else {
+                // In normal view, maintain zoom level
                 if (currentScale <= 1) {
                     currentScale = 1;
                     translateX = 0;
                     translateY = 0;
                     slideElement.classList.remove('zoomed');
-                } else {
-                    slideElement.classList.add('zoomed');
+                    img.style.transform = 'scale(1) translate(0, 0)';
                 }
-                
-                const img = slideElement.querySelector('img');
-                if (img) {
-                    if (isFullscreen() && currentScale === 1) {
-                        slideElement.classList.add('reset-zoom');
-                        setTimeout(() => slideElement.classList.remove('reset-zoom'), 300);
-                    }
-                    updateImageTransform(img);
-                }
-            } else if (currentScale === 1) {
-                touchEndX = e.changedTouches[0].clientX;
-                touchEndY = e.changedTouches[0].clientY;
-                
-                const deltaX = touchEndX - touchStartX;
-                const deltaY = Math.abs(touchEndY - touchStartY);
-                
-                if (Math.abs(deltaX) > 50 && deltaY < 50) {
-                    handleSwipe(deltaX);
-                }
+            }
+        }
+
+        // Handle swipe gestures
+        function handleSwipeStart(e) {
+            if (e.touches.length !== 1 || currentScale > 1) return;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }
+
+        function handleSwipeMove(e) {
+            if (e.touches.length !== 1 || currentScale > 1) return;
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - touchStartX;
+            updateSwipeOverlay(deltaX);
+        }
+
+        function handleSwipeEnd(e) {
+            if (currentScale > 1) return;
+            const touch = e.changedTouches[0];
+            const deltaX = touch.clientX - touchStartX;
+            const deltaY = Math.abs(touch.clientY - touchStartY);
+            
+            if (Math.abs(deltaX) > 50 && deltaY < 50) {
+                handleSwipe(deltaX);
             }
             
             leftOverlay.style.opacity = '0';
             rightOverlay.style.opacity = '0';
         }
 
-        function updateImageTransform(img) {
-            img.style.transform = `scale(${currentScale}) translate(${translateX / currentScale}px, ${translateY / currentScale}px)`;
-        }
+        // Add touch event listeners
+        document.addEventListener('touchstart', e => {
+            if (e.touches.length === 2) {
+                handleZoomStart(e);
+            } else {
+                handleSwipeStart(e);
+            }
+        });
+
+        document.addEventListener('touchmove', e => {
+            if (isZooming) {
+                handleZoomMove(e);
+            } else {
+                handleSwipeMove(e);
+            }
+        });
+
+        document.addEventListener('touchend', e => {
+            if (isZooming) {
+                handleZoomEnd(e);
+            } else {
+                handleSwipeEnd(e);
+            }
+        });
 
         function handleDoubleTap(e) {
             if (currentScale > 1) {
