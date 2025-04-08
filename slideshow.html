@@ -236,26 +236,27 @@
                     currentSlide = findNextAccessibleSlide(currentSlide, -1);
                 }
 
-                const response = await fetch(`output/${currentSlide}.html`);
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const svgContent = doc.querySelector('svg');
-                
                 const slideElement = document.getElementById('slide');
                 slideElement.innerHTML = '';
-                if (svgContent) {
-                    // Remove any fixed dimensions from the SVG
-                    svgContent.removeAttribute('width');
-                    svgContent.removeAttribute('height');
-                    svgContent.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-                    svgContent.style.width = 'auto';
-                    svgContent.style.height = 'auto';
-                    svgContent.style.maxWidth = '95%';
-                    svgContent.style.maxHeight = '95%';
-                    slideElement.appendChild(svgContent);
-                }
                 
+                // Create and configure the image element
+                const img = document.createElement('img');
+                img.src = `images/${currentSlide}.png`;
+                img.alt = `Slide ${currentSlide}`;
+                img.style.maxWidth = '95%';
+                img.style.maxHeight = '95%';
+                img.style.objectFit = 'contain';
+                img.style.display = 'block';
+                img.style.margin = '0 auto';
+                
+                // Add loading state
+                img.style.opacity = '0';
+                img.onload = () => {
+                    img.style.transition = 'opacity 0.3s ease-in-out';
+                    img.style.opacity = '1';
+                };
+                
+                slideElement.appendChild(img);
                 document.getElementById('slideNumber').textContent = `Slide ${currentSlide} of ${totalSlides}`;
             } catch (error) {
                 console.error('Error loading slide:', error);
