@@ -54,15 +54,6 @@
             padding: 20px;
         }
 
-        .slide svg {
-            width: auto !important;
-            height: auto !important;
-            max-width: 95% !important;
-            max-height: 95% !important;
-            display: block;
-            margin: auto;
-        }
-
         .controls {
             position: relative;
             bottom: 0;
@@ -146,12 +137,39 @@
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
-                gap: 10px;
+                gap: 15px;
+                padding: 15px;
             }
 
             .controls-left, .controls-right {
                 width: 100%;
                 justify-content: center;
+            }
+
+            .btn {
+                padding: 12px 24px;
+                font-size: 18px;
+                min-width: 140px;
+            }
+
+            .slide-number {
+                font-size: 18px;
+                padding: 12px 24px;
+            }
+
+            .checkbox-container {
+                font-size: 16px;
+                margin: 10px 0;
+            }
+
+            .custom-checkbox {
+                width: 24px;
+                height: 24px;
+            }
+
+            .fullscreen-btn {
+                padding: 15px;
+                font-size: 24px;
             }
         }
 
@@ -177,13 +195,62 @@
             border: 2px solid white;
             border-radius: 4px;
         }
+
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Touch feedback indicators */
+        .swipe-overlay {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            width: 60px;
+            background: rgba(255, 255, 255, 0.2);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            display: none;
+        }
+
+        .swipe-left {
+            left: 0;
+        }
+
+        .swipe-right {
+            right: 0;
+        }
+
+        @media (max-width: 768px) {
+            .swipe-overlay {
+                display: block;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="slideshow-container">
+        <div class="swipe-overlay swipe-left" id="swipeLeft"></div>
+        <div class="swipe-overlay swipe-right" id="swipeRight"></div>
         <button class="fullscreen-btn" onclick="toggleFullscreen()">⛶</button>
         <div class="slide-container">
             <div id="slide" class="slide"></div>
+            <div id="loader" class="loader"></div>
         </div>
         <div class="controls">
             <div class="controls-left">
@@ -237,6 +304,9 @@
                 }
 
                 const slideElement = document.getElementById('slide');
+                const loader = document.getElementById('loader');
+                let loaderTimeout;
+                
                 slideElement.innerHTML = '';
                 
                 // Create and configure the image element
@@ -247,13 +317,29 @@
                 img.style.maxHeight = '95%';
                 img.style.objectFit = 'contain';
                 img.style.display = 'block';
+                img.style.opacity = '0';
                 img.style.margin = '0 auto';
                 
-                // Add loading state
-                img.style.opacity = '0';
+                // Only show loader if image takes more than 100ms to load
+                loaderTimeout = setTimeout(() => {
+                    loader.style.display = 'block';
+                }, 100);
+                
+                // Handle image load
                 img.onload = () => {
-                    img.style.transition = 'opacity 0.3s ease-in-out';
-                    img.style.opacity = '1';
+                    clearTimeout(loaderTimeout);
+                    loader.style.display = 'none';
+                    requestAnimationFrame(() => {
+                        img.style.transition = 'opacity 0.3s ease-in-out';
+                        img.style.opacity = '1';
+                    });
+                };
+
+                // Handle image error
+                img.onerror = () => {
+                    clearTimeout(loaderTimeout);
+                    loader.style.display = 'none';
+                    console.error('Failed to load image:', currentSlide);
                 };
                 
                 slideElement.appendChild(img);
@@ -297,6 +383,65 @@
             } else {
                 if (document.exitFullscreen) {
                     document.exitFullscreen();
+                }
+            }
+        }
+
+        // Touch support variables
+        let touchStartX = 0;
+        let touchEndX = 0;
+        let currentTouchX = 0;
+        
+        // Get overlay elements
+        const leftOverlay = document.getElementById('swipeLeft');
+        const rightOverlay = document.getElementById('swipeRight');
+        
+        // Add touch event listeners
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+            currentTouchX = touchStartX;
+        }, false);
+
+        document.addEventListener('touchmove', e => {
+            currentTouchX = e.changedTouches[0].screenX;
+            updateSwipeOverlay();
+        }, false);
+        
+        document.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+            // Reset overlays
+            leftOverlay.style.opacity = '0';
+            rightOverlay.style.opacity = '0';
+        }, false);
+        
+        // Update swipe overlay feedback
+        function updateSwipeOverlay() {
+            const swipeDistance = currentTouchX - touchStartX;
+            const maxOpacity = 0.3;
+            const opacity = Math.min(Math.abs(swipeDistance) / 100, maxOpacity);
+            
+            if (swipeDistance > 0) {
+                rightOverlay.style.opacity = opacity;
+                leftOverlay.style.opacity = '0';
+            } else {
+                leftOverlay.style.opacity = opacity;
+                rightOverlay.style.opacity = '0';
+            }
+        }
+        
+        // Handle swipe gesture
+        function handleSwipe() {
+            const swipeThreshold = 50; // minimum distance for swipe
+            const swipeDistance = touchEndX - touchStartX;
+            
+            if (Math.abs(swipeDistance) > swipeThreshold) {
+                if (swipeDistance > 0) {
+                    // Swipe right - go to previous slide
+                    prevSlide();
+                } else {
+                    // Swipe left - go to next slide
+                    nextSlide();
                 }
             }
         }
