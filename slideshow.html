@@ -64,7 +64,7 @@
             display: block;
             transform-origin: center;
             transition: transform 0.2s ease-out;
-            touch-action: pinch-zoom;
+            touch-action: none;
         }
 
         .slide.zoomed {
@@ -73,7 +73,15 @@
         }
 
         .slide.zoomed img {
-            cursor: zoom-out;
+            cursor: move;
+        }
+
+        .slide.fullscreen img {
+            transition: transform 0.3s ease-out;
+        }
+
+        .slide.fullscreen.reset-zoom img {
+            transform: scale(1) translate(0, 0) !important;
         }
 
         @media (max-width: 768px) {
@@ -503,18 +511,31 @@
         let touchEndY = 0;
         let startDistance = 0;
         let isZooming = false;
+        let isPanning = false;
         let currentScale = 1;
         let initialScale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let lastTranslateX = 0;
+        let lastTranslateY = 0;
         
         // Get overlay elements
         const leftOverlay = document.getElementById('swipeLeft');
         const rightOverlay = document.getElementById('swipeRight');
         const slideElement = document.getElementById('slide');
         
+        function isFullscreen() {
+            return document.fullscreenElement !== null;
+        }
+        
         // Handle zoom gestures
         function handleZoomStart(e) {
+            const img = slideElement.querySelector('img');
+            if (!img) return;
+
             if (e.touches.length === 2) {
                 isZooming = true;
+                isPanning = false;
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
                 startDistance = Math.hypot(
@@ -522,13 +543,22 @@
                     touch2.clientY - touch1.clientY
                 );
                 initialScale = currentScale;
-            } else {
+            } else if (e.touches.length === 1) {
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
+                if (currentScale > 1) {
+                    isPanning = true;
+                    isZooming = false;
+                    lastTranslateX = translateX || 0;
+                    lastTranslateY = translateY || 0;
+                }
             }
         }
 
         function handleZoomMove(e) {
+            const img = slideElement.querySelector('img');
+            if (!img) return;
+
             if (isZooming && e.touches.length === 2) {
                 const touch1 = e.touches[0];
                 const touch2 = e.touches[1];
@@ -538,22 +568,21 @@
                 );
                 
                 currentScale = initialScale * (currentDistance / startDistance);
-                currentScale = Math.min(Math.max(1, currentScale), 4); // Limit zoom between 1x and 4x
+                currentScale = Math.min(Math.max(1, currentScale), 4);
                 
-                const img = slideElement.querySelector('img');
-                if (img) {
-                    img.style.transform = `scale(${currentScale})`;
-                }
+                updateImageTransform(img);
+                e.preventDefault();
+            } else if (isPanning && e.touches.length === 1) {
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - touchStartX;
+                const deltaY = touch.clientY - touchStartY;
                 
-                if (currentScale > 1) {
-                    slideElement.classList.add('zoomed');
-                } else {
-                    slideElement.classList.remove('zoomed');
-                }
+                translateX = lastTranslateX + deltaX;
+                translateY = lastTranslateY + deltaY;
                 
-                e.preventDefault(); // Prevent default zoom
-            } else if (!isZooming && e.touches.length === 1) {
-                // Only handle swipe if not zoomed
+                updateImageTransform(img);
+                e.preventDefault();
+            } else if (!isZooming && !isPanning && e.touches.length === 1) {
                 if (currentScale === 1) {
                     const touch = e.touches[0];
                     const deltaX = touch.clientX - touchStartX;
@@ -563,25 +592,45 @@
         }
 
         function handleZoomEnd(e) {
-            if (isZooming) {
+            if (isZooming || isPanning) {
                 isZooming = false;
+                isPanning = false;
+                
+                if (currentScale <= 1) {
+                    currentScale = 1;
+                    translateX = 0;
+                    translateY = 0;
+                    slideElement.classList.remove('zoomed');
+                } else {
+                    slideElement.classList.add('zoomed');
+                }
+                
+                const img = slideElement.querySelector('img');
+                if (img) {
+                    if (isFullscreen() && currentScale === 1) {
+                        slideElement.classList.add('reset-zoom');
+                        setTimeout(() => slideElement.classList.remove('reset-zoom'), 300);
+                    }
+                    updateImageTransform(img);
+                }
             } else if (currentScale === 1) {
-                // Only handle swipe if not zoomed
                 touchEndX = e.changedTouches[0].clientX;
                 touchEndY = e.changedTouches[0].clientY;
                 
                 const deltaX = touchEndX - touchStartX;
                 const deltaY = Math.abs(touchEndY - touchStartY);
                 
-                // Only trigger swipe if horizontal movement is greater and vertical movement is small
                 if (Math.abs(deltaX) > 50 && deltaY < 50) {
                     handleSwipe(deltaX);
                 }
             }
             
-            // Reset overlays
             leftOverlay.style.opacity = '0';
             rightOverlay.style.opacity = '0';
+        }
+
+        function updateImageTransform(img) {
+            img.style.transform = `scale(${currentScale}) translate(${translateX / currentScale}px, ${translateY / currentScale}px)`;
         }
 
         function handleDoubleTap(e) {
