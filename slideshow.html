@@ -89,10 +89,18 @@
             display: flex;
             gap: 10px;
             z-index: 10;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.95);
             padding: 8px;
             align-items: center;
             justify-content: space-between;
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .controls.hidden {
+            transform: translateY(100%);
+            opacity: 0;
         }
 
         .controls-left {
@@ -202,29 +210,40 @@
         }
 
         @media (max-width: 768px) {
+            .slide-container {
+                padding-bottom: env(safe-area-inset-bottom, 0);
+            }
+
             .controls {
-                padding: 6px;
-                gap: 6px;
+                padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0)) 8px;
+                gap: 8px;
+                background: rgba(0, 0, 0, 0.98);
             }
 
             .controls-left {
-                gap: 6px;
+                gap: 8px;
             }
 
             .btn {
-                padding: 4px 8px;
-                min-width: 70px;
-                font-size: 0.8rem;
-                border-width: 1px;
+                padding: 6px 12px;
+                min-width: 80px;
+                font-size: 0.85rem;
             }
 
             .slide-number {
-                font-size: 0.8rem;
-                padding: 4px 8px;
+                font-size: 0.85rem;
+                padding: 6px 8px;
             }
 
             .checkbox-container {
-                display: none; /* Hide on mobile for simplicity */
+                padding: 6px 10px;
+                font-size: 0.85rem;
+                background: rgba(255, 255, 255, 0.2);
+            }
+
+            .custom-checkbox {
+                width: 18px;
+                height: 18px;
             }
         }
 
@@ -265,14 +284,20 @@
         .checkbox-container {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             color: white;
-            font-size: 16px;
-            margin-left: 20px;
+            font-size: 0.9rem;
+            padding: 4px 8px;
             white-space: nowrap;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1px;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .checkbox-container:hover {
+            background: rgba(255, 255, 255, 0.25);
         }
 
         .custom-checkbox {
@@ -280,9 +305,9 @@
             height: 16px;
             cursor: pointer;
             margin: 0;
-            accent-color: white;
-            border: 2px solid white;
-            border-radius: 4px;
+            accent-color: #3498db;
+            border: none;
+            border-radius: 3px;
         }
 
         .loader {
@@ -534,6 +559,25 @@
                 }
             }
         }
+
+        // Control visibility
+        let controlsTimeout;
+        const controls = document.querySelector('.controls');
+        
+        function showControls() {
+            controls.classList.remove('hidden');
+            clearTimeout(controlsTimeout);
+            controlsTimeout = setTimeout(() => {
+                controls.classList.add('hidden');
+            }, 3000); // Hide after 3 seconds of inactivity
+        }
+
+        // Show controls on touch/mouse movement
+        document.addEventListener('touchstart', showControls);
+        document.addEventListener('mousemove', showControls);
+
+        // Show controls initially
+        showControls();
 
         // Load first slide
         updateSlide();
